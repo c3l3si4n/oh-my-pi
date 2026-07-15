@@ -529,8 +529,13 @@ export class InteractiveMode implements InteractiveModeContext {
 	readonly #version: string;
 	readonly #changelogMarkdown: string | undefined;
 	#planModePreviousTools: string[] | undefined;
-	#goalModePreviousTools: string[] | undefined;
-	#vibeModePreviousTools: string[] | undefined;
+	/**
+	 * Pre-restricted-mode toolset, captured once by whichever of vibe/goal mode
+	 * enters first (never contains "goal" or vibe tools), cleared when the last
+	 * of them exits. One shared baseline — separate per-mode "previous tools"
+	 * would capture each other's restricted sets when the modes compose.
+	 */
+	#modeBaselineTools: string[] | undefined;
 	#goalContinuationTimer: NodeJS.Timeout | undefined;
 	#goalTurnHadToolCalls = false;
 	#goalContinuationTurnInFlight = false;
@@ -1236,12 +1241,18 @@ export class InteractiveMode implements InteractiveModeContext {
 		if ((this.editor.pendingImages?.length ?? 0) > 0) return;
 		const state = this.session.getGoalModeState();
 		if (!state?.enabled || state.goal.status !== "active") return;
+		// In vibe mode, a worker turn in flight will wake the director on its own
+		// (async settle self-delivery); firing a continuation meanwhile just makes
+		// the director poll. A hung worker turn defers (not loses) continuation:
+		// any later agent_end or user input reschedules.
+		if (this.#vibeWorkerTurnInFlight()) return;
 		const prompt = this.session.goalRuntime.buildContinuationPrompt();
 		if (!prompt) return;
 		this.#goalContinuationTimer = setTimeout(() => {
 			this.#goalContinuationTimer = undefined;
 			if (!this.onInputCallback) return;
 			if (!this.goalModeEnabled || this.goalModePaused) return;
+			if (this.#vibeWorkerTurnInFlight()) return;
 			// The 800ms timer can outlive the idle window that scheduled it: a
 			// `/goal set` taken via the streaming branch (or any extension/hook
 			// path that starts a turn while we wait) leaves the agent busy. Firing
@@ -1271,6 +1282,13 @@ export class InteractiveMode implements InteractiveModeContext {
 			clearTimeout(this.#goalContinuationTimer);
 			this.#goalContinuationTimer = undefined;
 		}
+	}
+
+	#vibeWorkerTurnInFlight(): boolean {
+		return (
+			this.vibeModeEnabled &&
+			VibeSessionRegistry.global().hasInFlightTurn(this.session.getAgentId() ?? MAIN_AGENT_ID)
+		);
 	}
 
 	#isAutoSubmitBlocked(): boolean {
@@ -2113,13 +2131,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 
 		if (this.goalModeEnabled || this.goalModePaused) {
-			if (this.#goalModePreviousTools !== undefined) {
-				await this.session.setActiveToolsByName(this.#goalModePreviousTools);
-			}
 			this.session.setGoalModeState(undefined);
 			this.goalModeEnabled = false;
 			this.goalModePaused = false;
-			this.#goalModePreviousTools = undefined;
 			this.#goalTurnHadToolCalls = false;
 			this.#goalContinuationTurnInFlight = false;
 			this.#goalSuppressNextContinuation = false;
@@ -2128,16 +2142,19 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 
 		if (this.vibeModeEnabled) {
-			await this.session.deactivateVibeTools(this.#vibeModePreviousTools ?? []);
+			await this.session.deactivateVibeTools(this.#modeBaselineTools ?? []);
 			this.session.setVibeModeState(undefined);
 			this.vibeModeEnabled = false;
-			this.#vibeModePreviousTools = undefined;
 			await VibeSessionRegistry.global().killAll(
 				this.session.getAgentId() ?? MAIN_AGENT_ID,
 				this.session.asyncJobManager,
 			);
 			this.#updateVibeModeStatus();
+		} else if (this.#modeBaselineTools !== undefined) {
+			// Goal mode (alone) was the only restricted mode; restore its baseline.
+			await this.session.setActiveToolsByName(this.#modeBaselineTools);
 		}
+		this.#modeBaselineTools = undefined;
 	}
 
 	/** Reconcile mode state from session entries on resume/switch. */
@@ -2161,6 +2178,11 @@ export class InteractiveMode implements InteractiveModeContext {
 				mode: "active",
 				goal,
 			});
+			// Restore vibe mode before onThreadResumed so its persist snapshots
+			// carry `vibe: true`, and before the toolset recompute below.
+			if (sessionContext.modeData?.vibe === true) {
+				await this.#enterVibeMode({ silent: true });
+			}
 			const restored = await this.session.goalRuntime.onThreadResumed({
 				preserveActiveGoal: options?.preserveActiveGoal,
 			});
@@ -2169,9 +2191,8 @@ export class InteractiveMode implements InteractiveModeContext {
 			// sdk.ts excludes "goal" from the initial active tool set unconditionally.
 			// Re-add it now so the agent can call resume, complete, or drop on this goal.
 			if (restored?.goal) {
-				const previousTools = this.session.getEnabledToolNames().filter(name => name !== "goal");
-				this.#goalModePreviousTools = previousTools;
-				await this.session.setActiveToolsByName([...new Set([...previousTools, "goal"])]);
+				this.#captureModeToolBaseline();
+				await this.#applyModeToolset();
 			}
 			this.#updateGoalModeStatus();
 			return;
@@ -2365,6 +2386,53 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 	}
 
+	#captureModeToolBaseline(): void {
+		if (this.#modeBaselineTools !== undefined) return;
+		this.#modeBaselineTools = this.session.getActiveToolNames().filter(name => name !== "goal");
+	}
+
+	/**
+	 * Recompute the active toolset from the current vibe/goal flags. The modes
+	 * compose: vibe+goal is the vibe restricted set plus the goal tool. The
+	 * goal tool stays active for paused goals so the agent can resume, complete,
+	 * or drop them (matching the resume-reconcile convention).
+	 */
+	async #applyModeToolset(): Promise<void> {
+		const goalToolWanted = this.goalModeEnabled || this.goalModePaused;
+		if (this.vibeModeEnabled) {
+			const active = this.session.getActiveToolNames();
+			await this.session.setActiveToolsByName(
+				goalToolWanted ? [...new Set([...active, "goal"])] : active.filter(name => name !== "goal"),
+			);
+			return;
+		}
+		const baseline = this.#modeBaselineTools ?? this.session.getActiveToolNames().filter(name => name !== "goal");
+		if (goalToolWanted) {
+			await this.session.setActiveToolsByName([...new Set([...baseline, "goal"])]);
+			return;
+		}
+		await this.session.setActiveToolsByName(baseline);
+		this.#modeBaselineTools = undefined;
+	}
+
+	/**
+	 * Persist the current (possibly combined) mode as the latest mode-change
+	 * entry. Keyed on session goal state rather than the interactive flags so
+	 * it stays correct mid-reconcile.
+	 */
+	#persistModeSnapshot(): void {
+		const goalState = this.session.getGoalModeState();
+		if (goalState?.goal && (goalState.enabled || goalState.goal.status === "paused")) {
+			const mode = goalState.enabled ? "goal" : "goal_paused";
+			this.sessionManager.appendModeChange(
+				mode,
+				this.vibeModeEnabled ? { goal: goalState.goal, vibe: true } : { goal: goalState.goal },
+			);
+			return;
+		}
+		this.sessionManager.appendModeChange(this.vibeModeEnabled ? "vibe" : "none");
+	}
+
 	async #enterGoalMode(options: { objective?: string; resume?: boolean; silent?: boolean }): Promise<void> {
 		if (this.goalModeEnabled) {
 			return;
@@ -2373,20 +2441,14 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.showWarning("Exit plan mode first.");
 			return;
 		}
-		if (this.vibeModeEnabled) {
-			this.showWarning("Exit vibe mode first.");
-			return;
-		}
-		const previousTools = this.session.getEnabledToolNames().filter(name => name !== "goal");
-		const goalTools = [...new Set([...previousTools, "goal"])];
-		this.#goalModePreviousTools = previousTools;
+		this.#captureModeToolBaseline();
 		this.goalModePaused = false;
 		const state = options.resume
 			? await this.session.goalRuntime.resumeGoal()
 			: await this.session.goalRuntime.createGoal({ objective: options.objective ?? "" });
-		await this.session.setActiveToolsByName(goalTools);
 		this.session.setGoalModeState(state);
 		this.goalModeEnabled = true;
+		await this.#applyModeToolset();
 		this.#resetGoalContinuationSuppression();
 		this.#updateGoalModeStatus();
 		if (this.session.isStreaming) {
@@ -2402,14 +2464,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		paused?: boolean;
 		reason?: "completed" | "paused" | "dropped";
 	}): Promise<void> {
-		const previousTools = this.#goalModePreviousTools;
-		if (this.goalModeEnabled && previousTools) {
-			await this.session.setActiveToolsByName(previousTools);
-		}
 		const currentState = this.session.getGoalModeState();
 		if (options?.reason === "completed") {
 			this.session.setGoalModeState(undefined);
-			this.sessionManager.appendModeChange("none");
+			this.#persistModeSnapshot();
 			this.sessionManager.appendCustomEntry("goal-completed", {
 				objective: currentState?.goal?.objective,
 				tokensUsed: currentState?.goal?.tokensUsed,
@@ -2419,7 +2477,9 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 		this.goalModeEnabled = false;
 		this.goalModePaused = options?.paused ?? false;
-		this.#goalModePreviousTools = undefined;
+		// Derived recompute is idempotent, so the drop path's double invocation
+		// (goal_updated handler + #confirmAndDropGoal) is safe.
+		await this.#applyModeToolset();
 		this.#goalContinuationTurnInFlight = false;
 		this.#cancelGoalContinuation();
 		this.#updateGoalModeStatus();
@@ -2947,17 +3007,13 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.showWarning("Exit plan mode first.");
 			return;
 		}
-		if (this.goalModeEnabled || this.goalModePaused) {
-			this.showWarning("Exit goal mode first.");
-			return;
-		}
 		await this.#enterVibeMode();
 		if (initialPrompt && this.onInputCallback) {
 			this.onInputCallback(this.startPendingSubmission({ text: initialPrompt }));
 		}
 	}
 
-	async #enterVibeMode(): Promise<void> {
+	async #enterVibeMode(options?: { silent?: boolean }): Promise<void> {
 		if (this.vibeModeEnabled) {
 			return;
 		}
@@ -2965,14 +3021,9 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.showWarning("Exit plan mode first.");
 			return;
 		}
-		if (this.goalModeEnabled || this.goalModePaused) {
-			this.showWarning("Exit goal mode first.");
-			return;
-		}
 
-		const previousTools = this.session.getEnabledToolNames();
-		await this.session.activateVibeTools(["read"]);
-		this.#vibeModePreviousTools = previousTools;
+		this.#captureModeToolBaseline();
+		await this.session.activateVibeTools(this.goalModeEnabled || this.goalModePaused ? ["read", "goal"] : ["read"]);
 		this.vibeModeEnabled = true;
 		// Suppress cache-miss marker on the next turn: vibe mode changes the
 		// injected context, which predictably invalidates the cache.
@@ -2982,25 +3033,35 @@ export class InteractiveMode implements InteractiveModeContext {
 			await this.session.sendVibeModeContext({ deliverAs: "steer" });
 		}
 		this.#updateVibeModeStatus();
-		this.sessionManager.appendModeChange("vibe");
-		this.showStatus("Vibe mode enabled. You direct fast/good worker sessions; toolset is read + vibe tools.");
+		this.#persistModeSnapshot();
+		if (!options?.silent) {
+			this.showStatus(
+				this.goalModeEnabled
+					? "Vibe mode enabled. You direct fast/good worker sessions toward the active goal; toolset is read + vibe + goal tools."
+					: "Vibe mode enabled. You direct fast/good worker sessions; toolset is read + vibe tools.",
+			);
+		}
 	}
 
 	async #exitVibeMode(): Promise<void> {
 		if (!this.vibeModeEnabled) {
 			return;
 		}
-		await this.session.deactivateVibeTools(this.#vibeModePreviousTools ?? []);
+		const goalToolWanted = this.goalModeEnabled || this.goalModePaused;
+		const baseline = this.#modeBaselineTools ?? [];
+		await this.session.deactivateVibeTools(goalToolWanted ? [...new Set([...baseline, "goal"])] : baseline);
 		this.session.setVibeModeState(undefined);
 		this.vibeModeEnabled = false;
-		this.#vibeModePreviousTools = undefined;
+		if (!goalToolWanted) {
+			this.#modeBaselineTools = undefined;
+		}
 		this.lastAssistantUsage = undefined;
 		const killed = await VibeSessionRegistry.global().killAll(
 			this.session.getAgentId() ?? MAIN_AGENT_ID,
 			this.session.asyncJobManager,
 		);
 		this.#updateVibeModeStatus();
-		this.sessionManager.appendModeChange("none");
+		this.#persistModeSnapshot();
 		this.showStatus(
 			killed > 0
 				? `Vibe mode disabled. Killed ${killed} worker session${killed === 1 ? "" : "s"}.`
@@ -3038,10 +3099,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		try {
 			if (this.planModeEnabled || this.planModePaused) {
 				this.showWarning("Exit plan mode first.");
-				return;
-			}
-			if (this.vibeModeEnabled) {
-				this.showWarning("Exit vibe mode first.");
 				return;
 			}
 			if (!this.session.settings.get("goal.enabled")) {
