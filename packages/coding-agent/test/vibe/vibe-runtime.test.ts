@@ -251,6 +251,44 @@ describe("vibe session registry", () => {
 		expect(entry.turns).toBe(1);
 	});
 
+	it("scout cli maps to the read-only scout bundled agent", async () => {
+		let capturedAgent: string | undefined;
+		let capturedTools: string[] | undefined;
+		const fake = createFakeWorkerSession();
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			capturedAgent = options.agent?.name;
+			capturedTools = options.agent?.tools as string[] | undefined;
+			AgentRegistry.global().register({
+				id: options.id,
+				displayName: options.id,
+				kind: "sub",
+				parentId: "Main",
+				session: fake.session,
+				status: "running",
+			});
+			AgentRegistry.global().setStatus(options.id, "idle");
+			return makeResult(options.id, { agent: "scout" });
+		});
+
+		const manager = createManager();
+		const session = createSession({ manager });
+		const registry = VibeSessionRegistry.global();
+
+		const { id, jobId } = await registry.spawn(session, {
+			cli: "scout",
+			name: "Recon",
+			prompt: "Enumerate the sinks.",
+		});
+		await manager.getJob(jobId)!.promise;
+
+		expect(capturedAgent).toBe("scout");
+		// Read-only recon tier: no edit/write/bash reaches the worker.
+		expect(capturedTools).toContain("read");
+		expect(capturedTools).not.toContain("edit");
+		expect(capturedTools).not.toContain("bash");
+		expect(registry.screens("Main").find(s => s.id === id)?.cli).toBe("scout");
+	});
+
 	it("send steers a streaming mid-turn worker and queues for a non-steerable one", async () => {
 		const gate = deferred();
 		const fake = createFakeWorkerSession({ streaming: true });
