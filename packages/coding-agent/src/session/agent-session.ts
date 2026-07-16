@@ -7652,7 +7652,7 @@ export class AgentSession {
 		return {
 			role: "custom",
 			customType: "vibe-mode-context",
-			content: prompt.render(vibeModeActivePrompt),
+			content: prompt.render(vibeModeActivePrompt, { notify: this.settings.get("telegram.enabled") === true }),
 			display: false,
 			attribution: "agent",
 			timestamp: Date.now(),

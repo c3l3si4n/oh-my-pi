@@ -56,7 +56,9 @@ export class NotifyTool implements AgentTool<typeof notifySchema, NotifyToolDeta
 	readonly parameters = notifySchema;
 	readonly strict = true;
 	readonly intent = "omit" as const;
-	readonly loadMode = "discoverable";
+	// Top-level (not mounted under xd://): the agent is asked to notify on every
+	// substantial update, so the tool must stay directly visible in the schema.
+	readonly loadMode = "essential";
 	readonly #session: ToolSession;
 
 	constructor(session: ToolSession) {

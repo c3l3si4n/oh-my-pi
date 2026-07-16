@@ -3023,7 +3023,11 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 
 		this.#captureModeToolBaseline();
-		await this.session.activateVibeTools(this.goalModeEnabled || this.goalModePaused ? ["read", "goal"] : ["read"]);
+		const vibeBase = this.goalModeEnabled || this.goalModePaused ? ["read", "goal"] : ["read"];
+		// Keep the director able to ping the user out-of-band when notifications
+		// are configured; unregistered when telegram is off, so this is a no-op then.
+		if (this.settings.get("telegram.enabled")) vibeBase.push("notify");
+		await this.session.activateVibeTools(vibeBase);
 		this.vibeModeEnabled = true;
 		// Suppress cache-miss marker on the next turn: vibe mode changes the
 		// injected context, which predictably invalidates the cache.

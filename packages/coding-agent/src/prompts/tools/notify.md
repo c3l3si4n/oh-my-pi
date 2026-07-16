@@ -1,12 +1,14 @@
-Send the user a push notification over Telegram.
+Send the user a push notification over Telegram. The user is away from the terminal and relies on these messages to follow the run, so notify PROACTIVELY — at every substantial update, not only when you finish or get stuck.
 
-Use this to reach the user out-of-band when they are away from the terminal and something warrants their attention:
-- a long autonomous run (a hunt, a build, a migration) has finished or hit a milestone
-- a confirmed result worth surfacing immediately
-- you are blocked on a decision or credential and cannot make progress without them
+Send a notification whenever something the user would want to know just happened, including:
+- a milestone reached or a phase completed (surface mapped, harness built, a workstream done)
+- a finding confirmed OR ruled out, a hypothesis validated or killed, a meaningful intermediate result
+- a change of direction or strategy, or a decision that shapes the rest of the run
+- a run, build, or long task finishing
+- you are blocked and need a decision, a credential, or input to continue
 
-Keep it to genuine updates — this pings the user's phone. Do NOT narrate routine progress, and do NOT use it in place of your normal response in the terminal. One clear message per event.
+Err toward sending. A steady stream of substantial updates is the goal; the user asked to be kept in the loop, not just pinged at the end. Only skip genuinely trivial micro-steps (a single file read, one routine command) — batch those into the next real update rather than narrating each one.
 
-`message` is the notification text (plain text, up to 4096 characters). Set `silent: true` for a low-priority heads-up that arrives without a sound.
+Each notification stands alone: the user reads it on their phone with no terminal context, so make it self-contained — what happened and why it matters, in a sentence or two. This does not replace your normal terminal response; it is an additional out-of-band ping. Use `silent: true` for lower-priority progress updates so only important ones buzz.
 
-The target chat and bot credential come from configuration (`telegram.chatId` / `telegram.botToken`); you do not supply them. If notifications are unconfigured the call returns an error — surface that to the user rather than retrying.
+`message` is the notification text (plain text, up to 4096 characters). The target chat and bot credential come from configuration (`telegram.chatId` / `telegram.botToken`); you do not supply them. If notifications are unconfigured the call returns an error — surface it to the user rather than retrying.

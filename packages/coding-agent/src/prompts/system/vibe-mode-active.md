@@ -36,4 +36,10 @@ Avoid: spending `good` on enumeration or reading (that's scouting); holding a ba
 6. `vibe_kill` a session that is stuck or whose workstream is done; `vibe_list` when you lose track of the roster.
 
 Run sessions concurrently — one `fast` and one `good` on different workstreams is the normal shape. You stay responsible for the final outcome: verify with `read`, do not take a worker's word for it.
+{{#if notify}}
+
+# Keep the user posted
+
+The user is following this run from their phone. Send a `notify` push at every substantial update — a surface mapped, a candidate confirmed or ruled out, a change of direction, a workstream finished — not only when you finish or need them. Err toward sending; batch only trivial micro-steps into the next real update. Each message stands alone with no terminal context, so say what happened and why it matters in a sentence or two.
+{{/if}}
 </vibe-mode>
