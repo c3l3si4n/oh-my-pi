@@ -55,11 +55,6 @@
 - Fixed ACP clients rendering `xd://` device dispatches as file edits; they now map to an `execute`-kind tool call titled with the device URL.
 - Fixed non-yolo approval modes double-prompting for `xd://` device dispatches.
 - Fixed TTSR rules with leading inline regex flags failing to compile and being silently dropped in Bun/JS environments, and recovered scope tokens and sibling values from malformed frontmatter.
-### Added
-
-- Goal mode now composes with vibe mode: `/goal` and `/vibe` can be active together, turning the vibe director into a goal-guided autonomous orchestrator. Goal prompts adapt to directing (verify with `read`, delegate checks to workers), goal auto-continuation defers while worker turns are in flight, worker-session token usage counts toward the goal budget, and the combined mode persists across session resume.
-- Added a `consult` tool (Settings › Model › Advisor › Consult Tool, `advisor.toolEnabled`): the main agent can request a one-shot second opinion from the advisor-role model on demand, instead of (or alongside) the passive per-turn advisor. The consultation includes a bounded recent-transcript excerpt plus caller-supplied context, and its token usage is billed into session stats like `task` subagent spend.
-- Added a `scout` vibe worker flavor alongside `fast`/`good`: a cheap read-only recon tier (`read`/`grep`/`glob`/`web_search`, the `@smol` model) for breadth-first enumeration that returns a compressed candidate list. Directs the vibe prompt to route enumeration to `scout`, mechanical hands-on work to `fast`, and reserve the strong `good` tier for judgment/confirmation — cutting the cost of read-heavy fan-out (pin the cheap tier with `task.agentModelOverrides.sonic`/`.scout`).
 
 ## [16.5.2] - 2026-07-14
 
