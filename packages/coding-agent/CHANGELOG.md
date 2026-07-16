@@ -51,6 +51,7 @@
 ### Added
 
 - Goal mode now composes with vibe mode: `/goal` and `/vibe` can be active together, turning the vibe director into a goal-guided autonomous orchestrator. Goal prompts adapt to directing (verify with `read`, delegate checks to workers), goal auto-continuation defers while worker turns are in flight, worker-session token usage counts toward the goal budget, and the combined mode persists across session resume.
+- Added a `consult` tool (Settings › Model › Advisor › Consult Tool, `advisor.toolEnabled`): the main agent can request a one-shot second opinion from the advisor-role model on demand, instead of (or alongside) the passive per-turn advisor. The consultation includes a bounded recent-transcript excerpt plus caller-supplied context, and its token usage is billed into session stats like `task` subagent spend.
 
 ## [16.5.2] - 2026-07-14
 

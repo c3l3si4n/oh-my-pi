@@ -1,5 +1,5 @@
 import type { InMemorySnapshotStore } from "@oh-my-pi/hashline";
-import type { AgentTelemetryConfig, AgentTool } from "@oh-my-pi/pi-agent-core";
+import type { AgentMessage, AgentTelemetryConfig, AgentTool } from "@oh-my-pi/pi-agent-core";
 import type { FetchImpl, ImageContent, Model, ServiceTierByFamily, ToolChoice } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { AsyncJobManager } from "../async/job-manager";
@@ -39,6 +39,7 @@ import { BashTool } from "./bash";
 import { BrowserTool } from "./browser";
 import { type BuiltinToolName, type HiddenToolName, normalizeToolNames } from "./builtin-names";
 import { type CheckpointState, CheckpointTool, type CompletedRewindState, RewindTool } from "./checkpoint";
+import { ConsultTool } from "./consult";
 import { DebugTool } from "./debug";
 import { EvalTool } from "./eval";
 import { resolveEvalBackends } from "./eval-backends";
@@ -274,6 +275,8 @@ export interface ToolSession {
 	getGoalRuntime?: () => GoalRuntime | undefined;
 	/** Get cumulative session usage statistics (input/output tokens, cost). */
 	getUsageStatistics?: () => UsageStatistics;
+	/** Snapshot of the primary agent's message history (for the consult tool's transcript excerpt). */
+	getSessionMessages?: () => AgentMessage[];
 	/** Current per-turn token budget {total, spent, hard} for the eval `budget` helper. */
 	getTurnBudget?: () => { total: number | null; spent: number; hard: boolean };
 	/** Record output tokens consumed by an eval-spawned subagent toward the current turn budget. */
@@ -375,6 +378,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	inspect_image: s => new InspectImageTool(s),
 	browser: s => new BrowserTool(s),
 	checkpoint: CheckpointTool.createIf,
+	consult: s => new ConsultTool(s),
 	rewind: RewindTool.createIf,
 	task: s => TaskTool.create(s),
 	hub: s => new HubTool(s),
@@ -519,6 +523,7 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		if (name === "ask") return session.settings.get("ask.enabled");
 		if (name === "browser") return session.settings.get("browser.enabled");
 		if (name === "checkpoint" || name === "rewind") return session.settings.get("checkpoint.enabled");
+		if (name === "consult") return session.settings.get("advisor.toolEnabled");
 		if (name === "retain" || name === "recall" || name === "reflect") {
 			return ["hindsight", "mnemopi"].includes(session.settings.get("memory.backend") ?? "");
 		}

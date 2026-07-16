@@ -16032,7 +16032,8 @@ export class AgentSession {
 				totalCost += assistantMsg.usage.cost.total;
 			}
 
-			if (message.role === "toolResult" && message.toolName === "task") {
+			// task: sync subagent spend; consult: one-shot advisor-model spend.
+			if (message.role === "toolResult" && (message.toolName === "task" || message.toolName === "consult")) {
 				const usage = getTaskToolUsage(message.details);
 				if (usage) {
 					totalInput += usage.input;

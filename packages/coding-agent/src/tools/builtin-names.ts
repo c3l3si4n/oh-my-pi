@@ -14,6 +14,7 @@ export const BUILTIN_TOOL_NAMES = [
 	"inspect_image",
 	"browser",
 	"checkpoint",
+	"consult",
 	"rewind",
 	"task",
 	"hub",

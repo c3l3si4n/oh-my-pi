@@ -433,6 +433,17 @@ export const SETTINGS_SCHEMA = {
 				"Start on the active model, then switch to a fast/cheap model (default the 'smol' role) at the first edit/write after the plan nudge's todo list exists — the strong model plans, commits the todos, and starts the implementation before handing off. Overridable per session with --prewalk / --no-prewalk.",
 		},
 	},
+	"advisor.toolEnabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "model",
+			group: "Advisor",
+			label: "Consult Tool",
+			description:
+				"Expose a 'consult' tool so the main agent can request a one-shot second opinion from the advisor model on demand. Independent of Enable Advisor (the passive per-turn reviewer).",
+		},
+	},
 	"advisor.subagents": {
 		type: "boolean",
 		default: false,
