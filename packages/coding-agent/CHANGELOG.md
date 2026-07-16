@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Goal mode now composes with vibe mode: `/goal` and `/vibe` can be active together, turning the vibe director into a goal-guided autonomous orchestrator. Goal prompts adapt to directing (verify with `read`, delegate checks to workers), goal auto-continuation defers while worker turns are in flight, worker-session token usage counts toward the goal budget, and the combined mode persists across session resume.
+- Added a `consult` tool (Settings › Model › Advisor › Consult Tool, `advisor.toolEnabled`): the main agent can request a one-shot second opinion from the advisor-role model on demand, instead of (or alongside) the passive per-turn advisor. The consultation includes a bounded recent-transcript excerpt plus caller-supplied context, and its token usage is billed into session stats like `task` subagent spend.
+- Added a `scout` vibe worker flavor alongside `fast`/`good`: a cheap read-only recon tier (`read`/`grep`/`glob`/`web_search`, the `@smol` model) for breadth-first enumeration that returns a compressed candidate list. The vibe director prompt now carries a when-to-spawn-what playbook (scout → fast → good) and routes enumeration to `scout`, mechanical work to `fast`, and reserves the strong `good` tier for judgment/confirmation — pin the cheap tier with `task.agentModelOverrides.sonic`/`.scout`.
+- Added a `notify` tool (Settings › Tools › Notifications › Telegram Notify, `telegram.enabled`): sends a push message to a Telegram chat via the Bot API so an autonomous agent can reach the user when they are away from the terminal. The bot token and target chat come from `telegram.botToken`/`telegram.chatId` in config and are never supplied by the model.
+
 ## [17.0.0] - 2026-07-15
 
 ### Breaking Changes

@@ -365,6 +365,22 @@ export const SETTINGS_SCHEMA = {
 	"auth.broker.url": { type: "string", default: undefined },
 	"auth.broker.token": { type: "string", default: undefined },
 
+	// Telegram push notifications (the `notify` tool). Token/chat are hidden from
+	// the UI — populate via config.yml. `telegram.enabled` gates the tool.
+	"telegram.enabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Notifications",
+			label: "Telegram Notify",
+			description:
+				"Expose a 'notify' tool that sends a push message to a Telegram chat (set telegram.botToken and telegram.chatId in config), so the agent can reach you when you're away from the terminal.",
+		},
+	},
+	"telegram.botToken": { type: "string", default: undefined },
+	"telegram.chatId": { type: "string", default: undefined },
+
 	autoResume: {
 		type: "boolean",
 		default: false,

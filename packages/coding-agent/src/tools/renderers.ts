@@ -25,6 +25,7 @@ import { grepToolRenderer } from "./grep";
 import { hubToolRenderer } from "./hub";
 import { inspectImageToolRenderer } from "./inspect-image-renderer";
 import { recallToolRenderer, reflectToolRenderer, retainToolRenderer } from "./memory-render";
+import { notifyToolRenderer } from "./notify";
 import { readToolRenderer } from "./read";
 import { resolveRenderer } from "./resolve";
 import { todoToolRenderer } from "./todo";
@@ -85,6 +86,7 @@ export const toolRenderers: Record<string, ToolRenderer> = {
 	browser: browserToolRenderer as ToolRenderer,
 	consult: consultToolRenderer as ToolRenderer,
 	debug: debugToolRenderer as ToolRenderer,
+	notify: notifyToolRenderer as ToolRenderer,
 	eval: evalToolRenderer as ToolRenderer,
 	edit: editToolRenderer as ToolRenderer,
 	apply_patch: editToolRenderer as ToolRenderer,

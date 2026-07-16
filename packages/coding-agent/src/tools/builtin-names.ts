@@ -15,6 +15,7 @@ export const BUILTIN_TOOL_NAMES = [
 	"browser",
 	"checkpoint",
 	"consult",
+	"notify",
 	"rewind",
 	"task",
 	"hub",
