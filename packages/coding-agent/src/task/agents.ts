@@ -70,6 +70,21 @@ const EMBEDDED_AGENT_DEFS: EmbeddedAgentDef[] = [
 		},
 		template: taskMd,
 	},
+	{
+		fileName: "builder.md",
+		frontmatter: {
+			name: "builder",
+			description:
+				"Implementation subagent: plans on the strong model, then hands off to the cheap prewalk target at the first edit for the mechanical build-out. For plan-heavy, edit-heavy work (harnesses, scaffolds, multi-file implementations) — not for judgment/confirmation, which should stay on the strong model throughout.",
+			model: "@task",
+			thinkingLevel: AUTO_THINKING,
+			// Starts strong (inherits the session model), then prewalk switches to the
+			// configured @smol target at the first edit. Override the target per
+			// deployment with `task.agentPrewalk.builder: <model>`.
+			prewalk: true,
+		},
+		template: taskMd,
+	},
 ];
 
 // Computed lazily on first loadBundledAgents() call to avoid eager prompt.render at module load.

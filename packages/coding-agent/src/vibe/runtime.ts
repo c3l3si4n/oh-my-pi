@@ -35,23 +35,27 @@ import { formatDuration } from "../tools/render-utils";
 import { ToolError } from "../tools/tool-errors";
 
 /** The worker CLI flavors the director drives. */
-export type VibeCli = "fast" | "good" | "scout";
+export type VibeCli = "fast" | "good" | "scout" | "build";
 
 /**
  * CLI flavor → bundled agent type. This IS the model-tier mapping: `sonic`
  * carries `model: "@smol"` (the configured fast/low-latency role), `task`
- * carries `model: "@task"` (inherits the session's strong model), and `scout`
+ * carries `model: "@task"` (inherits the session's strong model), `scout`
  * is the read-only recon agent (`read`/`grep`/`glob`/`web_search`, `@smol`,
- * structured summary output) for cheap breadth-first enumeration that returns a
- * compressed candidate list rather than mutating anything.
+ * structured summary output) for cheap breadth-first enumeration, and `builder`
+ * is a full-tool `@task` agent armed with `prewalk: true` — it starts strong to
+ * plan, then hands off to the cheap prewalk target at the first edit for the
+ * mechanical build-out.
  * Resolution goes through {@link resolveAgentModelPatterns} exactly like a
  * `task` spawn, so `task.agentModelOverrides` and model-role settings apply
- * (e.g. `task.agentModelOverrides.sonic`/`.scout` pin the cheap tier).
+ * (e.g. `task.agentModelOverrides.sonic`/`.scout` pin the cheap tier, and
+ * `task.agentPrewalk.builder` pins `build`'s hand-off target).
  */
 export const VIBE_CLI_AGENT: Record<VibeCli, string> = {
 	fast: "sonic",
 	good: "task",
 	scout: "scout",
+	build: "builder",
 };
 
 /** Worker session lifecycle as shown to the director. */

@@ -50,8 +50,8 @@ import {
 export const VIBE_TOOL_NAMES = ["vibe_spawn", "vibe_send", "vibe_wait", "vibe_kill", "vibe_list"] as const;
 
 const vibeSpawnSchema = type({
-	cli: type("'fast' | 'good' | 'scout'").describe(
-		"worker flavor: scout = cheap read-only recon (broad enumeration, returns a candidate list); fast = cheap model for mechanical hands-on work; good = strong model for judgment/confirmation",
+	cli: type("'fast' | 'good' | 'scout' | 'build'").describe(
+		"worker flavor: scout = cheap read-only recon (broad enumeration, returns a candidate list); fast = cheap model for mechanical hands-on work; build = plans on the strong model then hands off to a cheap model for the mechanical build-out (harnesses, scaffolds, multi-file implementations); good = strong model throughout for judgment/confirmation",
 	),
 	"name?": type("string <= 48").describe("optional session name; generated when omitted"),
 	prompt: type("string > 0").describe("first instruction; the worker starts with no other context"),
@@ -104,7 +104,7 @@ export class VibeSpawnTool implements AgentTool<typeof vibeSpawnSchema, VibeTool
 	readonly name = "vibe_spawn";
 	readonly approval = "exec" as const;
 	readonly label = "Vibe Spawn";
-	readonly summary = "Start a persistent scout/fast/good worker session";
+	readonly summary = "Start a persistent scout/fast/build/good worker session";
 	readonly description: string;
 	readonly parameters = vibeSpawnSchema;
 	readonly strict = true;

@@ -289,6 +289,42 @@ describe("vibe session registry", () => {
 		expect(registry.screens("Main").find(s => s.id === id)?.cli).toBe("scout");
 	});
 
+	it("build cli maps to the prewalk-armed builder bundled agent", async () => {
+		let capturedAgent: string | undefined;
+		let capturedPrewalk: unknown;
+		const fake = createFakeWorkerSession();
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async options => {
+			capturedAgent = options.agent?.name;
+			capturedPrewalk = (options.agent as { prewalk?: unknown } | undefined)?.prewalk;
+			AgentRegistry.global().register({
+				id: options.id,
+				displayName: options.id,
+				kind: "sub",
+				parentId: "Main",
+				session: fake.session,
+				status: "running",
+			});
+			AgentRegistry.global().setStatus(options.id, "idle");
+			return makeResult(options.id, { agent: "builder" });
+		});
+
+		const manager = createManager();
+		const session = createSession({ manager });
+		const registry = VibeSessionRegistry.global();
+
+		const { id, jobId } = await registry.spawn(session, {
+			cli: "build",
+			name: "Harness",
+			prompt: "Stand up a libFuzzer harness for the parser.",
+		});
+		await manager.getJob(jobId)!.promise;
+
+		expect(capturedAgent).toBe("builder");
+		// Armed so the strong planning head hands off to the cheap target at first edit.
+		expect(capturedPrewalk).toBe(true);
+		expect(registry.screens("Main").find(s => s.id === id)?.cli).toBe("build");
+	});
+
 	it("send steers a streaming mid-turn worker and queues for a non-steerable one", async () => {
 		const gate = deferred();
 		const fake = createFakeWorkerSession({ streaming: true });
